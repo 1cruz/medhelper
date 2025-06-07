@@ -1,0 +1,3 @@
+node_modules/
+.env
+patient_records/ # 稍後我們會創建這個資料夾，但通常不希望將本地測試數據上傳

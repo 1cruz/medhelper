@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 病歷解讀小幫手</title>
+    <style>
+        body {
+            font-family: 'Microsoft JhengHei', '微軟正黑體', 'PingFang TC', '蘋方-繁', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f7f6;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #007bff;
+            text-align: center;
+        }
+        h1 {
+            margin-bottom: 30px;
+        }
+        h2 {
+            margin-top: 30px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 1rem;
+            margin-bottom: 20px;
+        }
+        .button-group {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 12px 20px;
+            font-size: 1rem;
+            color: #fff;
+            background-color: #007bff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .output-section {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e9ecef;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            min-height: 100px;
+            white-space: pre-wrap; /* 保留換行和空格 */
+        }
+        .status-message {
+            text-align: center;
+            font-style: italic;
+            color: #6c757d;
+            margin-top: 15px;
+        }
+        .disclaimer {
+            margin-top: 30px;
+            padding: 15px;
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            color: #856404;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 0.9rem;
+        }
+        .patient-management-info {
+            margin-top: 30px;
+            padding: 15px;
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI 病歷解讀小幫手</h1>
+        <div class="disclaimer">
+            <strong>重要聲明：</strong>本工具提供的資訊僅供參考，不能取代專業醫師的診斷與建議。若有任何醫療相關問題，請務必諮詢專業醫療人員。
+        </div>
+
+        <h2>輸入病歷內容：</h2>
+        <textarea id="medicalRecordInput" placeholder="請在此貼上或輸入病歷文字..."></textarea>
+
+        <div class="button-group">
+            <button id="interpretLayman">通俗易懂版</button>
+            <button id="interpretProfessional">醫療專業版</button>
+        </div>
+
+        <h2>解讀結果：</h2>
+        <div id="interpretationOutput" class="output-section">
+            請先輸入病歷內容並選擇解讀版本。
+        </div>
+        <div id="statusMessage" class="status-message"></div>
+
+        <div class="patient-management-info">
+            <h3>病患管理與進階功能</h3>
+            <p>自動分類病症、不同病患的檔案儲存等功能，需要後端伺服器支援。本頁面僅為前端展示。實際部署時，這些功能將透過安全的後端服務實現，確保資料安全與隱私。</p>
+        </div>
+    </div>
+
+        <script>
+        const medicalRecordInput = document.getElementById('medicalRecordInput');
+        const interpretLaymanButton = document.getElementById('interpretLayman');
+        const interpretProfessionalButton = document.getElementById('interpretProfessional');
+        const interpretationOutput = document.getElementById('interpretationOutput');
+        const statusMessage = document.getElementById('statusMessage');
+
+        // API 金鑰已移至後端，前端不再需要 MOCK_API_KEY
+        // 前端的 prompt 產生邏輯也已移至後端
+
+        async function getInterpretation(recordText, version) {
+            if (!recordText.trim()) {
+                interpretationOutput.textContent = "請先輸入病歷內容。";
+                return;
+            }
+
+            interpretationOutput.textContent = ""; // 清空先前結果
+            statusMessage.textContent = "正在處理中，請稍候...";
+            interpretLaymanButton.disabled = true;
+            interpretProfessionalButton.disabled = true;
+
+            try {
+                // **開始：實際呼叫後端 API**
+                const response = await fetch('/api/interpret', { // 使用相對路徑，指向您的 Express 後端
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        recordText: recordText, // 從輸入框獲取的病歷文字
+                        version: version      // 'layman' 或 'professional'
+                    })
+                });
+
+                // 檢查後端回應是否成功
+                if (!response.ok) {
+                    let errorData;
+                    try {
+                        // 嘗試解析後端返回的 JSON 錯誤訊息
+                        errorData = await response.json();
+                    } catch (e) {
+                        // 如果後端回應不是 JSON，或解析失敗，使用狀態文字
+                        errorData = { error: response.statusText, details: `伺服器回應狀態: ${response.status}` };
+                    }
+                    // 拋出錯誤，讓 catch 區塊處理
+                    throw new Error(errorData.error || `伺服器錯誤，狀態碼: ${response.status}`);
+                }
+
+                // 解析後端返回的 JSON 資料
+                const data = await response.json();
+
+                if (data.interpretation) {
+                    interpretationOutput.textContent = data.interpretation;
+                    statusMessage.textContent = "解讀完成。";
+                } else {
+                    interpretationOutput.textContent = "從伺服器收到的回應格式不正確。";
+                    statusMessage.textContent = "發生錯誤。";
+                    console.error("從後端收到的回應無效:", data);
+                }
+                // **結束：實際呼叫後端 API**
+
+            } catch (error) {
+                console.error("前端呼叫 API 時發生錯誤:", error);
+                interpretationOutput.textContent = `抱歉，解讀過程中發生錯誤：${error.message}`;
+                statusMessage.textContent = "發生錯誤。";
+            } finally {
+                interpretLaymanButton.disabled = false;
+                interpretProfessionalButton.disabled = false;
+            }
+        }
+
+        interpretLaymanButton.addEventListener('click', () => {
+            const recordText = medicalRecordInput.value;
+            getInterpretation(recordText, 'layman');
+        });
+
+        interpretProfessionalButton.addEventListener('click', () => {
+            const recordText = medicalRecordInput.value;
+            getInterpretation(recordText, 'professional');
+        });
+
+        // 初始訊息
+        interpretationOutput.textContent = "請先輸入病歷內容並選擇解讀版本。";
+        const now = new Date();
+        const optionsDate = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
+        const optionsTime = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }; // 使用 24 小時制
+        try {
+            statusMessage.textContent = "目前日期：" + now.toLocaleDateString('zh-TW', optionsDate) + " " + now.toLocaleTimeString('zh-TW', optionsTime);
+        } catch (e) {
+            console.warn("無法格式化日期時間 (可能是環境不支援 zh-TW locale):", e);
+            statusMessage.textContent = "歡迎使用！"; // 備用訊息
+        }
+    </script>
+
+</body>
+</html>
