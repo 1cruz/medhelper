@@ -105,12 +105,34 @@
 <body>
     <div class="container">
         <h1>AI 病歷解讀小幫手</h1>
+        <!-- **** 開始插入：病患基本資料區塊 **** -->
+<h2>病患基本資料</h2>
+<div>
+    <label for="patientName">姓名:</label>
+    <input type="text" id="patientName" required style="margin-right: 10px;">
+
+    <label for="patientAge">年齡:</label>
+    <input type="number" id="patientAge" style="width: 60px; margin-right: 10px;">
+
+    <label for="patientGender">性別:</label>
+    <select id="patientGender" style="margin-right: 10px;">
+        <option value="">未指定</option>
+        <option value="male">男</option>
+        <option value="female">女</option>
+        <option value="other">其他</option>
+    </select>
+
+    <label for="ailmentArea">病情部位:</label>
+    <input type="text" id="ailmentArea" placeholder="例如：心臟科、胸腔科、頭部外傷" required>
+</div>
+<!-- **** 結束插入：病患基本資料區塊 **** -->
+
         <div class="disclaimer">
             <strong>重要聲明：</strong>本工具提供的資訊僅供參考，不能取代專業醫師的診斷與建議。若有任何醫療相關問題，請務必諮詢專業醫療人員。
         </div>
 
-        <h2>輸入病歷內容：</h2>
-        <textarea id="medicalRecordInput" placeholder="請在此貼上或輸入病歷文字..."></textarea>
+        <h2>主訴症狀：</h2>
+        <textarea id="symptomsInput" placeholder="請在此輸入病患主訴的症狀描述..."></textarea>
 
         <div class="button-group">
             <button id="interpretLayman">通俗易懂版</button>
@@ -139,89 +161,179 @@
         // API 金鑰已移至後端，前端不再需要 MOCK_API_KEY
         // 前端的 prompt 產生邏輯也已移至後端
 
-        async function getInterpretation(recordText, version) {
-            if (!recordText.trim()) {
-                interpretationOutput.textContent = "請先輸入病歷內容。";
-                return;
-            }
+        // --- 修改 getInterpretation 函數 ---
+async function getInterpretation(version) { // 不再傳入 recordText
+    // 從新的輸入欄位獲取值
+    const name = document.getElementById('patientName').value.trim();
+    const age = document.getElementById('patientAge').value; // number input 會自動處理
+    const gender = document.getElementById('patientGender').value;
+    const ailmentArea = document.getElementById('ailmentArea').value.trim();
+    const symptoms = document.getElementById('symptomsInput').value.trim(); // 從新的 textarea 獲取
 
-            interpretationOutput.textContent = ""; // 清空先前結果
-            statusMessage.textContent = "正在處理中，請稍候...";
-            interpretLaymanButton.disabled = true;
-            interpretProfessionalButton.disabled = true;
+    // --- 更新輸入驗證 ---
+    if (!name || !symptoms || !ailmentArea) { // 根據後端要求，name, symptoms, ailmentArea, version 是必須的
+        interpretationOutput.textContent = "請務必填寫姓名、病情部位和主訴症狀。";
+        statusMessage.textContent = "";
+        return;
+    }
 
+    interpretationOutput.textContent = ""; // 清空先前結果
+    statusMessage.textContent = "正在處理中，請稍候...";
+    interpretLaymanButton.disabled = true;
+    interpretProfessionalButton.disabled = true;
+
+    try {
+        const response = await fetch('/api/interpret', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            // --- 修改 body 以包含所有欄位 ---
+            body: JSON.stringify({
+                name: name,
+                age: age, // 如果 age 是空的，傳送空字串或 null，後端會處理
+                gender: gender,
+                symptoms: symptoms, // 使用新的 ID
+                version: version,
+                ailmentArea: ailmentArea
+            })
+        });
+
+        // ... (後續的錯誤處理和結果顯示邏輯保持不變) ...
+         if (!response.ok) {
+            let errorData;
             try {
-                // **開始：實際呼叫後端 API**
-                const response = await fetch('/api/interpret', { // 使用相對路徑，指向您的 Express 後端
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        recordText: recordText, // 從輸入框獲取的病歷文字
-                        version: version      // 'layman' 或 'professional'
-                    })
-                });
-
-                // 檢查後端回應是否成功
-                if (!response.ok) {
-                    let errorData;
-                    try {
-                        // 嘗試解析後端返回的 JSON 錯誤訊息
-                        errorData = await response.json();
-                    } catch (e) {
-                        // 如果後端回應不是 JSON，或解析失敗，使用狀態文字
-                        errorData = { error: response.statusText, details: `伺服器回應狀態: ${response.status}` };
-                    }
-                    // 拋出錯誤，讓 catch 區塊處理
-                    throw new Error(errorData.error || `伺服器錯誤，狀態碼: ${response.status}`);
-                }
-
-                // 解析後端返回的 JSON 資料
-                const data = await response.json();
-
-                if (data.interpretation) {
-                    interpretationOutput.textContent = data.interpretation;
-                    statusMessage.textContent = "解讀完成。";
-                } else {
-                    interpretationOutput.textContent = "從伺服器收到的回應格式不正確。";
-                    statusMessage.textContent = "發生錯誤。";
-                    console.error("從後端收到的回應無效:", data);
-                }
-                // **結束：實際呼叫後端 API**
-
-            } catch (error) {
-                console.error("前端呼叫 API 時發生錯誤:", error);
-                interpretationOutput.textContent = `抱歉，解讀過程中發生錯誤：${error.message}`;
-                statusMessage.textContent = "發生錯誤。";
-            } finally {
-                interpretLaymanButton.disabled = false;
-                interpretProfessionalButton.disabled = false;
+                errorData = await response.json();
+            } catch (e) {
+                errorData = { error: response.statusText, details: `伺服器回應狀態: ${response.status}` };
             }
+            throw new Error(errorData.error || `伺服器錯誤，狀態碼: ${response.status}`);
+        }
+        const data = await response.json();
+        if (data.interpretation) {
+            interpretationOutput.textContent = data.interpretation;
+            statusMessage.textContent = "解讀完成。";
+        } else {
+            interpretationOutput.textContent = "從伺服器收到的回應格式不正確。";
+            statusMessage.textContent = "發生錯誤。";
+            console.error("從後端收到的回應無效:", data);
         }
 
-        interpretLaymanButton.addEventListener('click', () => {
-            const recordText = medicalRecordInput.value;
-            getInterpretation(recordText, 'layman');
-        });
+    } catch (error) {
+        console.error("前端呼叫 API 時發生錯誤:", error);
+        interpretationOutput.textContent = `抱歉，解讀過程中發生錯誤：${error.message}`;
+        statusMessage.textContent = "發生錯誤。";
+    } finally {
+        interpretLaymanButton.disabled = false;
+        interpretProfessionalButton.disabled = false;
+    }
+}
 
-        interpretProfessionalButton.addEventListener('click', () => {
-            const recordText = medicalRecordInput.value;
-            getInterpretation(recordText, 'professional');
-        });
+// --- 修改按鈕事件監聽器 ---
+interpretLaymanButton.addEventListener('click', () => {
+    // 不再從 textarea 傳遞值，函數內部會自己去抓
+    getInterpretation('layman');
+});
 
-        // 初始訊息
-        interpretationOutput.textContent = "請先輸入病歷內容並選擇解讀版本。";
-        const now = new Date();
-        const optionsDate = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
-        const optionsTime = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }; // 使用 24 小時制
+interpretProfessionalButton.addEventListener('click', () => {
+    // 不再從 textarea 傳遞值，函數內部會自己去抓
+    getInterpretation('professional');
+});
+
+// --- 確保獲取新元素的 ID ---
+// 如果你的 script 在 HTML 元素定義之前執行，需要確保 DOM 已載入
+// 但因為你的 script 在 body 結尾，通常沒問題
+// const patientNameInput = document.getElementById('patientName');
+// const patientAgeInput = document.getElementById('patientAge');
+// const patientGenderSelect = document.getElementById('patientGender');
+// const ailmentAreaInput = document.getElementById('ailmentArea');
+// const symptomsInput = document.getElementById('symptomsInput'); // 使用新的 ID
+
+// ... 您現有的其他 JavaScript (例如日期顯示、查詢功能) ...
+</script>
+
+<!-- 在您的 HTML 檔案中找到合適的位置加入 (例如，在 "解讀結果" 或 "病患管理與進階功能" 區塊附近) -->
+
+<hr> <!-- 分隔線 -->
+
+<h2>病歷查詢</h2>
+<div>
+    <label for="searchName">輸入病患姓名：</label>
+    <input type="text" id="searchName" placeholder="例如：王小明">
+    <button id="searchButton">查詢病歷</button>
+</div>
+<div id="searchResults" style="margin-top: 15px; border: 1px solid #eee; padding: 10px; min-height: 50px;">
+    <!-- 查詢結果將顯示在這裡 -->
+    查詢結果將顯示於此處。
+</div>
+
+<!-- ... 您現有的其他 HTML ... -->
+
+<script>
+    // --- 在您現有的 <script> 標籤內或新增一個 <script> 標籤 ---
+
+    const searchNameInput = document.getElementById('searchName');
+    const searchButton = document.getElementById('searchButton');
+    const searchResultsDiv = document.getElementById('searchResults');
+
+    // 監聽查詢按鈕點擊事件
+    searchButton.addEventListener('click', async () => {
+        const nameToSearch = searchNameInput.value.trim();
+
+        if (!nameToSearch) {
+            searchResultsDiv.innerHTML = '<p style="color: orange;">請輸入要查詢的姓名。</p>';
+            return;
+        }
+
+        // 顯示載入中訊息
+        searchResultsDiv.innerHTML = '<p>正在查詢中...</p>';
+        searchButton.disabled = true; // 避免重複點擊
+
         try {
-            statusMessage.textContent = "目前日期：" + now.toLocaleDateString('zh-TW', optionsDate) + " " + now.toLocaleTimeString('zh-TW', optionsTime);
-        } catch (e) {
-            console.warn("無法格式化日期時間 (可能是環境不支援 zh-TW locale):", e);
-            statusMessage.textContent = "歡迎使用！"; // 備用訊息
+            // 發送 GET 請求到後端 /api/search
+            // 使用 encodeURIComponent 確保姓名中的特殊字元被正確編碼
+            const response = await fetch(`/api/search?name=${encodeURIComponent(nameToSearch)}`);
+
+            if (!response.ok) {
+                // 如果伺服器回傳錯誤狀態 (例如 400, 500)
+                const errorData = await response.json().catch(() => ({ error: '無法解析錯誤訊息' })); // 嘗試解析錯誤 JSON，若失敗則給預設訊息
+                throw new Error(`查詢失敗：${response.status} - ${errorData.error || '未知錯誤'}`);
+            }
+
+            const data = await response.json(); // 解析成功的 JSON 回應
+
+            // 清空結果區域
+            searchResultsDiv.innerHTML = '';
+
+            if (data.results && data.results.length > 0) {
+                // 如果有找到紀錄
+                const resultList = document.createElement('ul');
+                data.results.forEach(record => {
+                    const listItem = document.createElement('li');
+                    // 顯示基本資訊，您可以自行調整顯示格式
+                    listItem.textContent = `時間: ${record.timestamp} - 部位: ${record.ailmentArea} (檔案: ${record.fileName})`;
+                    // 您可以在這裡加上點擊事件，以便未來載入詳細內容
+                    // listItem.style.cursor = 'pointer';
+                    // listItem.onclick = () => loadRecordDetails(record.filePath); // 需要實作 loadRecordDetails 函數和對應後端
+                    resultList.appendChild(listItem);
+                });
+                searchResultsDiv.appendChild(resultList);
+            } else {
+                // 如果沒有找到紀錄
+                searchResultsDiv.innerHTML = `<p>${data.message || '找不到該病患的紀錄。'}</p>`;
+            }
+
+        } catch (error) {
+            console.error('查詢時發生錯誤:', error);
+            searchResultsDiv.innerHTML = `<p style="color: red;">查詢時發生錯誤：${error.message}</p>`;
+        } finally {
+            searchButton.disabled = false; // 重新啟用按鈕
         }
-    </script>
+    });
+
+    // --- 您現有的其他 JavaScript 程式碼 (例如處理 /api/interpret 的 fetch) ---
+
+</script>
 
 </body>
 </html>

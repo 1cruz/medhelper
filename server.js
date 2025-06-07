@@ -125,6 +125,48 @@ app.post('/api/interpret', async (req, res) => {
         });
     }
 });
+app.get('/api/search', (req, res) => {
+    const { name } = req.query;
+
+    if (!name) {
+        return res.status(400).json({ error: '請提供要查詢的病患姓名 (name)。' });
+    }
+    console.log(`收到查詢請求，姓名: ${name}`);
+    const patientBaseDir = path.join(__dirname, 'patient_records');
+    const patientDir = path.join(patientBaseDir, name);
+    let searchResults = [];
+    try {
+        if (!fs.existsSync(patientDir)) {
+            console.log(`找不到病患 ${name} 的紀錄資料夾。`);
+            return res.json({ message: `找不到病患 ${name} 的紀錄。`, results: [] });
+        }
+        const ailmentAreaFolders = fs.readdirSync(patientDir, { withFileTypes: true })
+                                     .filter(dirent => dirent.isDirectory())
+                                     .map(dirent => dirent.name);
+        ailmentAreaFolders.forEach(ailmentArea => {
+            const ailmentAreaDir = path.join(patientDir, ailmentArea);
+            const recordFiles = fs.readdirSync(ailmentAreaDir)
+                                  .filter(file => file.startsWith('record_') && file.endsWith('.txt'));
+            recordFiles.forEach(fileName => {
+                const timestampMatch = fileName.match(/record_(.+)\.txt/);
+                const timestamp = timestampMatch ? timestampMatch[1].replace(/T(\d{2})-(\d{2})-(\d{2})/, ' $1:$2:$3') : '未知時間';
+                searchResults.push({
+                    name: name,
+                    ailmentArea: ailmentArea,
+                    fileName: fileName,
+                    timestamp: timestamp,
+                });
+            });
+        });
+        searchResults.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        console.log(`查詢 ${name} 完成，找到 ${searchResults.length} 筆紀錄。`);
+        res.json({ message: `查詢完成。`, results: searchResults });
+    } catch (error) {
+        console.error(`查詢病患 ${name} 時發生錯誤:`, error);
+        res.status(500).json({ error: '查詢病歷時伺服器發生錯誤。', details: error.message });
+    }
+});
+// ******** 新程式碼結束點 ********
 
 
 // 根路徑，提供 HTML 檔案 (可選)
